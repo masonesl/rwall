@@ -20,11 +20,11 @@ class Config:
     commands:    Union[list[list[str]], list[str]]
 
 
-def main():
+def load_config() -> Config:
     # Load config into Config dataclass
     with open("rwall.yml", 'r') as conf_file:
         config_data: dict = safe_load(conf_file)
-        config = Config([], [], [])
+        config: Config = Config([], [], [])
 
         if not config_data:
             stderr.write("Can't read emtpy config file\n")
@@ -41,7 +41,11 @@ def main():
             stderr.write("Please specify command(s) in which to run\n")
             exit(1)
 
-        del config_data
+    return config
+
+
+def main():
+    config: Config = load_config()
 
     # Create a list that will hold all potential wallpaper paths
     all_wallpapers: list[str] = config.files
@@ -61,10 +65,10 @@ def main():
         if type(command) == list:
             for subcommand in command:
                 sprun(shsplit(subcommand.replace("{wall}", wallpaper)))
-                print(subcommand.replace("{wall}", wallpaper))
-        else:
+        elif type(command) == str:
             sprun(shsplit(command.replace("{wall}", wallpaper)))
-            print(command.replace("{wall}", wallpaper))
+        else:
+            stderr.write(f"Command '{command}' is not valid. Please use a string or list.\n")
 
 
 if __name__ == "__main__":
