@@ -39,6 +39,8 @@ commands:
 
 With this example, each monitor still gets its own wallpaper, but wallpapers don't have to be preloaded in the `hyprpaper` config file and, instead, can be loaded and unloaded on the fly.
 
+***
+
 rwall is built with wallpapers in mind, but can be used for other things such as a random fetch utility. For example:
 
 ```yaml
