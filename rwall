@@ -10,7 +10,7 @@ from subprocess  import run    as sprun
 from os          import (
         listdir,
         environ,
-        path
+        path,
     )
 
 @dataclass
@@ -20,9 +20,9 @@ class Config:
     commands:    Union[list[list[str]], list[str]]
 
 
-def load_config() -> Config:
+def load_config(config_path: str) -> Config:
     # Load config into Config dataclass
-    with open("rwall.yml", 'r') as conf_file:
+    with open(config_path, 'r') as conf_file:
         config_data: dict = safe_load(conf_file)
         config: Config = Config([], [], [])
 
@@ -67,11 +67,30 @@ def next_wallpaper(config: Config) -> None:
             sprun(shsplit(command.replace("{wall}", wallpaper)))
         else:
             stderr.write(f"Command '{command}' is not valid. Please use a string or list.\n")
-
+            exit(1)
 
 
 def main() -> None:
-    config: Config = load_config()
+    # Try to find where the config file might be located
+    # Check XDG_CONFIG_HOME or ~/.config
+    if "XDG_CONFIG_HOME" in environ:
+        config_path: str = environ["XDG_CONFIG_HOME"]
+    elif path.isdir(path.expanduser("~/.config")):
+        config_path: str = path.expanduser("~/.config")
+    else:
+        stderr.write("Can't file config parent directory.\n")
+        exit(1)
+
+    # Now try to find the config file itself
+    if path.isfile(f"{config_path}/rwall.yml"):
+        config_path += "/rwall.yml"
+    elif path.isfile(f"{config_path}/rwall.yaml"):
+        config_path += "/rwall.yaml"
+    else:
+        stderr.write("Can't find config file 'rwall.yaml' or 'rwall.yml'\n")
+        exit(1)
+
+    config: Config = load_config(config_path)
 
     next_wallpaper(config)
 
