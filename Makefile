@@ -1,8 +1,12 @@
+SUDO = sudo
+# SUDO = doas
+
 default:
 	@printf "Run 'make install' to install rwall\n"
 
 install:
-	@install rwall /usr/bin/rwall
+	@$(SUDO) install rwall /usr/bin/rwall
+	@install -m 644 rwall.yml ~/.config/rwall.yml
 
 uninstall:
-	@rm -f /usr/bin/rwall
+	@$(SUDO) rm -f /usr/bin/rwall

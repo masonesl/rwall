@@ -1,5 +1,6 @@
 files:
-  - neofetch
+  - uptime
+  - date
   - pfetch
 
 commands:
