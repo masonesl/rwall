@@ -1,0 +1,6 @@
+files:
+  - neofetch
+  - pfetch
+
+commands:
+  - '{wall}'

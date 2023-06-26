@@ -1,0 +1,71 @@
+#!/bin/python
+
+from typing      import Union
+from sys         import stderr
+from yaml        import safe_load
+from dataclasses import dataclass
+from random      import choice as rchoice
+from shlex       import split  as shsplit
+from subprocess  import run    as sprun
+from os          import (
+        listdir,
+        environ,
+        path
+    )
+
+@dataclass
+class Config:
+    files:       list[str]
+    directories: list[str]
+    commands:    Union[list[list[str]], list[str]]
+
+
+def main():
+    # Load config into Config dataclass
+    with open("rwall.yml", 'r') as conf_file:
+        config_data: dict = safe_load(conf_file)
+        config = Config([], [], [])
+
+        if not config_data:
+            stderr.write("Can't read emtpy config file\n")
+            exit(1)
+
+        if "files" in config_data:
+            config.files = config_data["files"]
+        if "directories" in config_data:
+            config.directories = config_data["directories"]
+
+        if "commands" in config_data:
+            config.commands = config_data["commands"]
+        else:
+            stderr.write("Please specify command(s) in which to run\n")
+            exit(1)
+
+        del config_data
+
+    # Create a list that will hold all potential wallpaper paths
+    all_wallpapers: list[str] = config.files
+
+    # Add all files in each directory specified in config
+    for directory in config.directories:
+        for filename in listdir(directory):
+            all_wallpapers.append(f"{directory}/{filename}")
+
+    if len(all_wallpapers) == 0:
+        stderr.write("Please specify files and/or directories in rwall.yml\n")
+        exit(1)
+
+    for command in config.commands:
+        wallpaper = rchoice(all_wallpapers)
+
+        if type(command) == list:
+            for subcommand in command:
+                sprun(shsplit(subcommand.replace("{wall}", wallpaper)))
+                print(subcommand.replace("{wall}", wallpaper))
+        else:
+            sprun(shsplit(command.replace("{wall}", wallpaper)))
+            print(command.replace("{wall}", wallpaper))
+
+
+if __name__ == "__main__":
+    main()
