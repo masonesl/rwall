@@ -44,9 +44,7 @@ def load_config() -> Config:
     return config
 
 
-def main():
-    config: Config = load_config()
-
+def next_wallpaper(config: Config) -> None:
     # Create a list that will hold all potential wallpaper paths
     all_wallpapers: list[str] = config.files
 
@@ -69,6 +67,13 @@ def main():
             sprun(shsplit(command.replace("{wall}", wallpaper)))
         else:
             stderr.write(f"Command '{command}' is not valid. Please use a string or list.\n")
+
+
+
+def main() -> None:
+    config: Config = load_config()
+
+    next_wallpaper(config)
 
 
 if __name__ == "__main__":
