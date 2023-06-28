@@ -4,6 +4,8 @@ rwall is a configurable random wallpaper chooser meant for use in standalone win
 
 ## Configuration
 
+rwall checks `XDG_CONFIG_HOME` and `~/.config` for the `rwall.yml` or `rwall.yaml` file.
+
 Specify files by path in the `files` block.
 
 ```yaml
@@ -20,7 +22,7 @@ directories:
   - /home/mason/Downloads
 ```
 
-Define which commands should be executed when the program runs. `{wall}` will be replaced by the selected wallpaper path.
+Define which commands should be executed when the program runs in the `command` block. `{wall}` will be replaced by the selected wallpaper path.
 
 ```yaml
 commands:
