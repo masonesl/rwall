@@ -3,7 +3,9 @@
 from typing      import Union
 from sys         import stderr
 from yaml        import safe_load
+from time        import sleep
 from dataclasses import dataclass
+from threading   import Thread
 from random      import choice as rchoice
 from shlex       import split  as shsplit
 from subprocess  import run    as sprun
@@ -11,20 +13,27 @@ from os          import (
         listdir,
         environ,
         path,
+        mkfifo,
+        remove,
+        getuid,
+        fork,
+        mkdir,
     )
+
 
 @dataclass
 class Config:
     files:       list[str]
     directories: list[str]
     commands:    Union[list[list[str]], list[str]]
+    delay_sec:   float
 
 
 def load_config(config_path: str) -> Config:
     # Load config into Config dataclass
     with open(config_path, 'r') as conf_file:
         config_data: dict = safe_load(conf_file)
-        config: Config = Config([], [], [])
+        config: Config = Config([], [], [], 600)
 
         if not config_data:
             stderr.write("Can't read emtpy config file\n")
@@ -41,7 +50,58 @@ def load_config(config_path: str) -> Config:
             stderr.write("Please specify command(s) in which to run\n")
             exit(1)
 
+        if "delay" in config_data:
+            if type(config_data["delay"] == str):
+                suffix: str = config_data["delay"][-1].lower()
+                delay: int = config_data["delay"][:-1]
+
+                match suffix:
+                    case 's':
+                        config.delay_sec = float(delay)
+                    case 'm':
+                        config.delay_sec = float(delay * 60)
+                    case 'h':
+                        config.delay_sec = float(delay * 3600)
+                    case _:
+                        stderr.write(f"Unkown suffix '{suffix}'. Use 's', 'm', 'h' or an integer.\n")
+                        exit(1)
+            else:
+                config.delay_sec = config_data["delay"]
+
     return config
+
+
+def pipe_listener(config: Config) -> None:
+    fifo_msg: str = ""
+
+    while fifo_msg != "kill":
+        with open("/tmp/rwall/rwall.fifo", 'r') as named_pipe:
+            fifo_msg = named_pipe.read()
+
+        if fifo_msg == "next":
+            next_wallpaper(config)
+
+
+def daemon_loop(config: Config) -> None:
+    while True:
+        with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
+            named_pipe.write("next")
+
+        sleep(config.delay_sec)
+
+
+def start_daemon(config: Config) -> None:
+    mkdir("/tmp/rwall")
+    mkfifo("/tmp/rwall/rwall.fifo")
+
+    listener: Thread = Thread(target=pipe_listener, args=(config,))
+    daemon:   Thread = Thread(target=daemon_loop, args=(config,), daemon=True)
+
+    proc_pid: int = fork()
+
+    if proc_pid == 0:
+        listener.start()
+        daemon.start()
 
 
 def next_wallpaper(config: Config) -> None:
@@ -92,7 +152,8 @@ def main() -> None:
 
     config: Config = load_config(config_path)
 
-    next_wallpaper(config)
+    # next_wallpaper(config)
+    start_daemon(config)
 
 
 if __name__ == "__main__":
