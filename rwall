@@ -1,6 +1,7 @@
 #!/bin/python
 
 from typing      import Union
+from argparse    import ArgumentParser, Namespace
 from sys         import stderr
 from yaml        import safe_load
 from time        import sleep, time
@@ -158,7 +159,7 @@ def next_wallpaper(config: Config) -> None:
             exit(1)
 
 
-def main() -> None:
+def main(arguments: Namespace) -> None:
     # Try to find where the config file might be located
     # Check XDG_CONFIG_HOME or ~/.config
     if "XDG_CONFIG_HOME" in environ:
@@ -180,9 +181,22 @@ def main() -> None:
 
     config: Config = load_config(config_path)
 
-    # next_wallpaper(config)
-    start_daemon(config)
+    match arguments.subcommand:
+        case "start":
+            start_daemon(config)
+        case "next":
+            next_wallpaper(config)
 
 
 if __name__ == "__main__":
-    main()
+    parser = ArgumentParser(prog = "rwall")
+    subparsers = parser.add_subparsers(dest = "subcommand")
+
+    start_parser = subparsers.add_parser("start")
+    start_parser.add_argument("-d", "--daemon", action = "store_true", dest = "daemon")
+
+    next_parser = subparsers.add_parser("next")
+
+    arguments = parser.parse_args()
+
+    main(arguments)
