@@ -6,7 +6,8 @@ default:
 
 install:
 	@$(SUDO) install rwall /usr/bin/rwall
-	@install -m 644 rwall.yml ~/.config/rwall.yml
+
+	@[ -e ~/.config/rwall.yml ] || [ -e ~/.config/rwall.yaml ] || install -m 644 rwall.yml ~/.config/rwall.yml
 
 uninstall:
 	@$(SUDO) rm -f /usr/bin/rwall
