@@ -3,7 +3,7 @@
 from typing      import Union
 from sys         import stderr
 from yaml        import safe_load
-from time        import sleep
+from time        import sleep, time
 from dataclasses import dataclass
 from threading   import Thread
 from random      import choice as rchoice
@@ -74,20 +74,45 @@ def load_config(config_path: str) -> Config:
 def pipe_listener(config: Config) -> None:
     fifo_msg: str = ""
 
+    # Start listening to the pipe
     while fifo_msg != "kill":
         with open("/tmp/rwall/rwall.fifo", 'r') as named_pipe:
             fifo_msg = named_pipe.read()
+            print(f"read {fifo_msg} from pipe")
 
-        if fifo_msg == "next":
+        if fifo_msg == "next" or fifo_msg == "dnext":
             next_wallpaper(config)
+
+            if fifo_msg == "next":
+                # Create a file with the current time to tell the daemon
+                # when the wallpaper was last changed
+                with open("/tmp/rwall/rwall.timestamp", 'w') as timestamp_file:
+                    timestamp_file.write(str(time()))
+
+        if fifo_msg == "rmtimestamp":
+            remove("/tmp/rwall/rwall.timestamp")
 
 
 def daemon_loop(config: Config) -> None:
-    while True:
-        with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
-            named_pipe.write("next")
+    fifo_msg: str = ""
+    delay_sec: float = 0
 
-        sleep(config.delay_sec)
+    while True:
+        if path.isfile("/tmp/rwall/rwall.timestamp"):
+            with open("/tmp/rwall/rwall.timestamp", 'r') as timestamp_file:
+                last_changed: float = float(timestamp_file.read())
+
+            fifo_msg = "rmtimestamp"
+            delay_sec = config.delay_sec - (time() - last_changed)
+        else:
+            fifo_msg = "dnext"
+            delay_sec = config.delay_sec
+
+        with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
+            print(f"writing {fifo_msg} to pipe")
+            named_pipe.write(fifo_msg)
+
+        sleep(delay_sec)
 
 
 def start_daemon(config: Config) -> None:
@@ -97,11 +122,14 @@ def start_daemon(config: Config) -> None:
     listener: Thread = Thread(target=pipe_listener, args=(config,))
     daemon:   Thread = Thread(target=daemon_loop, args=(config,), daemon=True)
 
-    proc_pid: int = fork()
+    # proc_pid: int = fork()
+    #
+    # if proc_pid == 0:
+    #     listener.start()
+    #     daemon.start()
 
-    if proc_pid == 0:
-        listener.start()
-        daemon.start()
+    listener.start()
+    daemon.start()
 
 
 def next_wallpaper(config: Config) -> None:
