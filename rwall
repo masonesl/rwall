@@ -19,6 +19,8 @@ from os          import (
         getuid,
         fork,
         mkdir,
+        getpid,
+        kill,
     )
 
 
@@ -64,7 +66,7 @@ def load_config(config_path: str) -> Config:
                     case 'h':
                         config.delay_sec = float(delay * 3600)
                     case _:
-                        stderr.write(f"Unkown suffix '{suffix}'. Use 's', 'm', 'h' or an integer.\n")
+                        stderr.write(f"Unkown suffix '{suffix}'. Use 's', 'm', 'h' or a number in seconds.\n")
                         exit(1)
             else:
                 config.delay_sec = config_data["delay"]
@@ -74,6 +76,10 @@ def load_config(config_path: str) -> Config:
 
 def pipe_listener(config: Config) -> None:
     fifo_msg: str = ""
+
+    # Write the current PID to a file for communication
+    with open("/tmp/rwall/rwall.pid", 'w') as pid_file:
+        pid_file.write(str(getpid()))
 
     # Start listening to the pipe
     while fifo_msg != "kill":
@@ -92,6 +98,9 @@ def pipe_listener(config: Config) -> None:
 
         if fifo_msg == "rmtimestamp":
             remove("/tmp/rwall/rwall.timestamp")
+
+    # Cleanup PID file
+    remove("/tmp/rwall/rwall.pid")
 
 
 def daemon_loop(config: Config) -> None:
@@ -116,21 +125,20 @@ def daemon_loop(config: Config) -> None:
         sleep(delay_sec)
 
 
-def start_daemon(config: Config) -> None:
-    mkdir("/tmp/rwall")
-    mkfifo("/tmp/rwall/rwall.fifo")
+def start_daemon(config: Config, daemonize: bool) -> None:
+    if not path.isdir("/tmp/rwall"):
+        mkdir("/tmp/rwall")
+    if not path.exists("/tmp/rwall/rwall.fifo"):
+        mkfifo("/tmp/rwall/rwall.fifo")
 
     listener: Thread = Thread(target=pipe_listener, args=(config,))
     daemon:   Thread = Thread(target=daemon_loop, args=(config,), daemon=True)
 
-    # proc_pid: int = fork()
-    #
-    # if proc_pid == 0:
-    #     listener.start()
-    #     daemon.start()
+    proc_pid: int = fork() if daemonize else -1
 
-    listener.start()
-    daemon.start()
+    if not daemonize or proc_pid == 0:
+        listener.start()
+        daemon.start()
 
 
 def next_wallpaper(config: Config) -> None:
@@ -183,9 +191,20 @@ def main(arguments: Namespace) -> None:
 
     match arguments.subcommand:
         case "start":
-            start_daemon(config)
+            start_daemon(config, arguments.daemon)
         case "next":
-            next_wallpaper(config)
+            try:
+                with open("/tmp/rwall/rwall.pid", 'r') as pid_file:
+                    possible_pid: int = int(pid_file.read())
+                kill(possible_pid, 0)
+            except OSError or FileNotFoundError:
+                next_wallpaper(config)
+            else:
+                with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
+                    named_pipe.write("next")
+        case "kill":
+            with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
+                named_pipe.write("kill")
 
 
 if __name__ == "__main__":
@@ -196,6 +215,8 @@ if __name__ == "__main__":
     start_parser.add_argument("-d", "--daemon", action = "store_true", dest = "daemon")
 
     next_parser = subparsers.add_parser("next")
+
+    kill_parser = subparsers.add_parser("kill")
 
     arguments = parser.parse_args()
 
