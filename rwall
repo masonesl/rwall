@@ -1,6 +1,6 @@
-#!/bin/python
+#!/usr/bin/python
 
-from typing      import Union
+from typing      import Union, Optional
 from argparse    import ArgumentParser, Namespace
 from sys         import stderr
 from yaml        import safe_load
@@ -10,6 +10,14 @@ from threading   import Thread
 from random      import choice as rchoice
 from shlex       import split  as shsplit
 from subprocess  import run    as sprun
+from logging     import (
+        Handler,
+        getLogger,
+        FileHandler,
+        Logger,
+        INFO,
+        Formatter,
+    )
 from os          import (
         listdir,
         environ,
@@ -22,6 +30,24 @@ from os          import (
         getpid,
         kill,
     )
+
+
+class Loggers:
+    cmd:      Optional[Logger] = None
+    listener: Optional[Logger] = None
+    daemon:   Optional[Logger] = None
+
+    @classmethod
+    def setup(cls):
+        handler = FileHandler("/tmp/rwall/rwall.log") 
+        formatter = Formatter("[%(name)s] (%(levelname)s) %(message)s")
+        handler.setFormatter(formatter)
+
+        for name, logger in zip(["cmd", "listener", "daemon"], [cls.cmd, cls.listener, cls.daemon]):
+            logger = getLogger(name) 
+            logger.setLevel(INFO)
+
+            logger.addHandler(handler)
 
 
 @dataclass
@@ -220,5 +246,7 @@ if __name__ == "__main__":
     kill_parser = subparsers.add_parser("kill")
 
     arguments = parser.parse_args()
+
+    Loggers.setup()
 
     main(arguments)
