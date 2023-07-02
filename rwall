@@ -62,15 +62,15 @@ def load_config(config_path: str) -> Config:
                     case 's':
                         config.delay_sec = float(delay)
                     case 'm':
-                        config.delay_sec = float(delay * 60)
+                        config.delay_sec = float(delay) * 60
                     case 'h':
-                        config.delay_sec = float(delay * 3600)
+                        config.delay_sec = float(delay) * 3600
                     case _:
                         stderr.write(f"Unkown suffix '{suffix}'. Use 's', 'm', 'h' or a number in seconds.\n")
                         exit(1)
             else:
                 config.delay_sec = config_data["delay"]
-
+    
     return config
 
 
@@ -130,6 +130,9 @@ def start_daemon(config: Config, daemonize: bool) -> None:
         mkdir("/tmp/rwall")
     if not path.exists("/tmp/rwall/rwall.fifo"):
         mkfifo("/tmp/rwall/rwall.fifo")
+
+    if path.isfile("/tmp/rwall/rwall.timestamp"):
+        remove("/tmp/rwall/rwall.timestamp")
 
     listener: Thread = Thread(target=pipe_listener, args=(config,))
     daemon:   Thread = Thread(target=daemon_loop, args=(config,), daemon=True)
