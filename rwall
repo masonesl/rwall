@@ -85,7 +85,6 @@ def pipe_listener(config: Config) -> None:
     while fifo_msg != "kill":
         with open("/tmp/rwall/rwall.fifo", 'r') as named_pipe:
             fifo_msg = named_pipe.read()
-            print(f"read {fifo_msg} from pipe")
 
         if fifo_msg == "next" or fifo_msg == "dnext":
             next_wallpaper(config)
@@ -119,7 +118,6 @@ def daemon_loop(config: Config) -> None:
             delay_sec = config.delay_sec
 
         with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
-            print(f"writing {fifo_msg} to pipe")
             named_pipe.write(fifo_msg)
 
         sleep(delay_sec)
