@@ -228,7 +228,7 @@ def main(arguments: Namespace) -> None:
     match arguments.subcommand:
         case "start":
             if check_running():
-                stderr.write("Daemon is already running") 
+                stderr.write("Daemon is already running.\n") 
                 exit(1)
 
             start_daemon(config, arguments.daemon)
