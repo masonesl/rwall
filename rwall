@@ -245,8 +245,12 @@ def main(arguments: Namespace) -> None:
                 with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
                     named_pipe.write("next")
         case "kill":
-            with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
-                named_pipe.write("kill")
+            if check_running():
+                with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
+                    named_pipe.write("kill")
+            else:
+                stderr.write("Daemon is not running.\n")
+                exit(1)
         case "list":
             for wp in get_wallpapers(config):
                 print(wp)
