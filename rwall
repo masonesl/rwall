@@ -80,18 +80,19 @@ def load_config(config_path: str) -> Config:
 def write_pipe(msg: str) -> None:
     with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
         named_pipe.write(msg)
+        print(f"Wrote '{msg}' to fifo")
 
 
 def read_pipe(fifo_msg: list[str]) -> None:
     with open("/tmp/rwall/rwall.fifo", 'r') as named_pipe:
         fifo_msg.append(named_pipe.read())
+        print(f"Got '{fifo_msg[0]}' from pipe")
 
 
 def pipe_listener(config: Config) -> None:
     fifo_msg: str = ""
 
     # Write the current PID to a file for communication
-    # Currently not used for anything
     with open("/tmp/rwall/rwall.pid", 'w') as pid_file:
         pid_file.write(str(getpid()))
 
@@ -110,11 +111,10 @@ def pipe_listener(config: Config) -> None:
                     timestamp_file.write(str(time()))
 
         if fifo_msg == "rmtimestamp":
+            print("Got 'rmtimestamp' from fifo")
             remove("/tmp/rwall/rwall.timestamp")
 
-        if fifo_msg == "hi":
-            with open("/tmp/rwall/rwall.fifo", "w") as named_pipe:
-                named_pipe.write("hello")
+        sleep(0.1)
 
     # Cleanup PID file
     remove("/tmp/rwall/rwall.pid")
@@ -193,17 +193,13 @@ def next_wallpaper(config: Config) -> None:
 
 
 def check_running() -> bool:
-    if path.exists("/tmp/rwall/rwall.fifo"):
-        timed_write: Thread = Thread(target=write_pipe, args=("hi",), daemon=True)
-        timed_write.start()
+    if path.exists("/tmp/rwall/rwall.pid"):
+        with open("/tmp/rwall/rwall.pid", 'r') as pid_file:
+            prev_pid = pid_file.read()
 
-        fifo_msg: list = []
-        timed_read: Thread = Thread(target=read_pipe, args=(fifo_msg,), daemon=True)
-
-        timed_read.start()
-        sleep(0.1)
-
-        if not timed_read.is_alive() and fifo_msg[0] == "hello":
+        if prev_pid in sprun(["pgrep", "rwall"],
+                             stdout=PIPE,
+                             text=True).stdout:
             return True
 
     return False
