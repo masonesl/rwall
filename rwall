@@ -2,7 +2,7 @@
 
 from typing      import Union, Optional
 from argparse    import ArgumentParser, Namespace
-from sys         import stderr, stdout
+from sys         import stderr
 from yaml        import safe_load
 from time        import sleep, time
 from dataclasses import dataclass
@@ -160,7 +160,7 @@ def start_daemon(config: Config, daemonize: bool) -> None:
         daemon.start()
 
 
-def next_wallpaper(config: Config) -> None:
+def get_wallpapers(config: Config) -> list[str]:
     # Create a list that will hold all potential wallpaper paths
     all_wallpapers: list[str] = config.files
 
@@ -170,8 +170,14 @@ def next_wallpaper(config: Config) -> None:
             all_wallpapers.append(f"{directory}/{filename}")
 
     if len(all_wallpapers) == 0:
-        stderr.write("Please specify files and/or directories in rwall.yml\n")
+        stderr.write("No files or directories specified in rwall.yml\n")
         exit(1)
+
+    return all_wallpapers
+
+
+def next_wallpaper(config: Config) -> None:
+    all_wallpapers: list[str] = get_wallpapers(config)
 
     for command in config.commands:
         wallpaper = rchoice(all_wallpapers)
@@ -245,6 +251,9 @@ def main(arguments: Namespace) -> None:
         case "kill":
             with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
                 named_pipe.write("kill")
+        case "list":
+            for wp in get_wallpapers(config):
+                print(wp)
 
 
 if __name__ == "__main__":
@@ -257,6 +266,8 @@ if __name__ == "__main__":
     next_parser = subparsers.add_parser("next")
 
     kill_parser = subparsers.add_parser("kill")
+
+    list_parser = subparsers.add_parser("list")
 
     arguments = parser.parse_args()
 
