@@ -89,7 +89,7 @@ def read_pipe(fifo_msg: list[str]) -> None:
         print(f"Got '{fifo_msg[0]}' from pipe")
 
 
-def pipe_listener(config: Config) -> None:
+def pipe_listener(config_path: str) -> None:
     fifo_msg: str = ""
 
     # Write the current PID to a file for communication
@@ -102,7 +102,7 @@ def pipe_listener(config: Config) -> None:
             fifo_msg = named_pipe.read()
 
         if fifo_msg == "next" or fifo_msg == "dnext":
-            next_wallpaper(config)
+            next_wallpaper(config_path)
 
             if fifo_msg == "next":
                 # Create a file with the current time to tell the daemon
@@ -120,9 +120,12 @@ def pipe_listener(config: Config) -> None:
     remove("/tmp/rwall/rwall.pid")
 
 
-def daemon_loop(config: Config) -> None:
+def daemon_loop(config_path: str) -> None:
+    def get_config_delay() -> float:
+        return load_config(config_path).delay_sec
+
     fifo_msg: str = ""
-    delay_sec: float = 0
+    delay_sec: float = get_config_delay()
 
     while True:
         if path.isfile("/tmp/rwall/rwall.timestamp"):
@@ -130,10 +133,10 @@ def daemon_loop(config: Config) -> None:
                 last_changed: float = float(timestamp_file.read())
 
             fifo_msg = "rmtimestamp"
-            delay_sec = config.delay_sec - (time() - last_changed)
+            delay_sec = get_config_delay() - (time() - last_changed)
         else:
             fifo_msg = "dnext"
-            delay_sec = config.delay_sec
+            delay_sec = get_config_delay()
 
         with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
             named_pipe.write(fifo_msg)
@@ -141,7 +144,7 @@ def daemon_loop(config: Config) -> None:
         sleep(delay_sec)
 
 
-def start_daemon(config: Config, daemonize: bool) -> None:
+def start_daemon(config_path: str, daemonize: bool) -> None:
     if not path.isdir("/tmp/rwall"):
         mkdir("/tmp/rwall")
     if not path.exists("/tmp/rwall/rwall.fifo"):
@@ -150,8 +153,8 @@ def start_daemon(config: Config, daemonize: bool) -> None:
     if path.isfile("/tmp/rwall/rwall.timestamp"):
         remove("/tmp/rwall/rwall.timestamp")
 
-    listener: Thread = Thread(target=pipe_listener, args=(config,))
-    daemon:   Thread = Thread(target=daemon_loop, args=(config,), daemon=True)
+    listener: Thread = Thread(target=pipe_listener, args=(config_path,))
+    daemon:   Thread = Thread(target=daemon_loop, args=(config_path,), daemon=True)
 
     proc_pid: int = fork() if daemonize else -1
 
@@ -176,7 +179,9 @@ def get_wallpapers(config: Config) -> list[str]:
     return all_wallpapers
 
 
-def next_wallpaper(config: Config) -> None:
+def next_wallpaper(config_path: str) -> None:
+    config: Config = load_config(config_path)
+
     all_wallpapers: list[str] = get_wallpapers(config)
 
     for command in config.commands:
@@ -233,14 +238,14 @@ def main(arguments: Namespace) -> None:
                 stderr.write("Daemon is already running.\n") 
                 exit(1)
 
-            start_daemon(config, arguments.daemon)
+            start_daemon(config_path, arguments.daemon)
         case "next":
             try:
                 with open("/tmp/rwall/rwall.pid", 'r') as pid_file:
                     possible_pid: int = int(pid_file.read())
                 kill(possible_pid, 0)
             except OSError or FileNotFoundError:
-                next_wallpaper(config)
+                next_wallpaper(config_path)
             else:
                 with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
                     named_pipe.write("next")
