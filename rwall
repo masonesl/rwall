@@ -2,21 +2,16 @@
 
 from typing      import Union, Optional
 from argparse    import ArgumentParser, Namespace
-from sys         import stderr
+from sys         import stderr, stdout
 from yaml        import safe_load
 from time        import sleep, time
 from dataclasses import dataclass
 from threading   import Thread
 from random      import choice as rchoice
 from shlex       import split  as shsplit
-from subprocess  import run    as sprun
-from logging     import (
-        Handler,
-        getLogger,
-        FileHandler,
-        Logger,
-        INFO,
-        Formatter,
+from subprocess  import (
+        run    as sprun,
+        PIPE
     )
 from os          import (
         listdir,
@@ -30,24 +25,6 @@ from os          import (
         getpid,
         kill,
     )
-
-
-class Loggers:
-    cmd:      Optional[Logger] = None
-    listener: Optional[Logger] = None
-    daemon:   Optional[Logger] = None
-
-    @classmethod
-    def setup(cls):
-        handler = FileHandler("/tmp/rwall/rwall.log") 
-        formatter = Formatter("[%(name)s] (%(levelname)s) %(message)s")
-        handler.setFormatter(formatter)
-
-        for name, logger in zip(["cmd", "listener", "daemon"], [cls.cmd, cls.listener, cls.daemon]):
-            logger = getLogger(name) 
-            logger.setLevel(INFO)
-
-            logger.addHandler(handler)
 
 
 @dataclass
@@ -100,10 +77,21 @@ def load_config(config_path: str) -> Config:
     return config
 
 
+def write_pipe(msg: str) -> None:
+    with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
+        named_pipe.write(msg)
+
+
+def read_pipe(fifo_msg: list[str]) -> None:
+    with open("/tmp/rwall/rwall.fifo", 'r') as named_pipe:
+        fifo_msg.append(named_pipe.read())
+
+
 def pipe_listener(config: Config) -> None:
     fifo_msg: str = ""
 
     # Write the current PID to a file for communication
+    # Currently not used for anything
     with open("/tmp/rwall/rwall.pid", 'w') as pid_file:
         pid_file.write(str(getpid()))
 
@@ -123,6 +111,10 @@ def pipe_listener(config: Config) -> None:
 
         if fifo_msg == "rmtimestamp":
             remove("/tmp/rwall/rwall.timestamp")
+
+        if fifo_msg == "hi":
+            with open("/tmp/rwall/rwall.fifo", "w") as named_pipe:
+                named_pipe.write("hello")
 
     # Cleanup PID file
     remove("/tmp/rwall/rwall.pid")
@@ -194,6 +186,23 @@ def next_wallpaper(config: Config) -> None:
             exit(1)
 
 
+def check_running() -> bool:
+    if path.exists("/tmp/rwall/rwall.fifo"):
+        timed_write: Thread = Thread(target=write_pipe, args=("hi",), daemon=True)
+        timed_write.start()
+
+        fifo_msg: list = []
+        timed_read: Thread = Thread(target=read_pipe, args=(fifo_msg,), daemon=True)
+
+        timed_read.start()
+        sleep(0.1)
+
+        if not timed_read.is_alive() and fifo_msg[0] == "hello":
+            return True
+
+    return False
+
+
 def main(arguments: Namespace) -> None:
     # Try to find where the config file might be located
     # Check XDG_CONFIG_HOME or ~/.config
@@ -202,7 +211,7 @@ def main(arguments: Namespace) -> None:
     elif path.isdir(path.expanduser("~/.config")):
         config_path: str = path.expanduser("~/.config")
     else:
-        stderr.write("Can't file config parent directory.\n")
+        stderr.write("Can't find config parent directory.\n")
         exit(1)
 
     # Now try to find the config file itself
@@ -218,6 +227,10 @@ def main(arguments: Namespace) -> None:
 
     match arguments.subcommand:
         case "start":
+            if check_running():
+                stderr.write("Daemon is already running") 
+                exit(1)
+
             start_daemon(config, arguments.daemon)
         case "next":
             try:
@@ -246,7 +259,5 @@ if __name__ == "__main__":
     kill_parser = subparsers.add_parser("kill")
 
     arguments = parser.parse_args()
-
-    Loggers.setup()
 
     main(arguments)
