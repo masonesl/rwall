@@ -2,7 +2,7 @@ SUDO = sudo
 # SUDO = doas
 
 default:
-	@printf "Run 'make install' to install rwall\n"
+	@printf "Run 'make install' to install or update rwall\n"
 
 install:
 	@$(SUDO) install rwall /usr/bin/rwall
