@@ -101,14 +101,14 @@ def pipe_listener(config_path: str) -> None:
         with open("/tmp/rwall/rwall.fifo", 'r') as named_pipe:
             fifo_msg = named_pipe.read()
 
-        if fifo_msg == "next" or fifo_msg == "dnext":
+        if fifo_msg == "dnext":
             next_wallpaper(config_path)
 
-            if fifo_msg == "next":
-                # Create a file with the current time to tell the daemon
-                # when the wallpaper was last changed
-                with open("/tmp/rwall/rwall.timestamp", 'w') as timestamp_file:
-                    timestamp_file.write(str(time()))
+        if fifo_msg == "next":
+            # Create a file with the current time to tell the daemon
+            # when the wallpaper was last changed
+            with open("/tmp/rwall/rwall.timestamp", 'w') as timestamp_file:
+                timestamp_file.write(str(time()))
 
         if fifo_msg == "rmtimestamp":
             print("Got 'rmtimestamp' from fifo")
@@ -179,10 +179,14 @@ def get_wallpapers(config: Config) -> list[str]:
     return all_wallpapers
 
 
-def next_wallpaper(config_path: str) -> None:
+def next_wallpaper(config_path: str, img_paths: Optional[list[str]]) -> None:
     config: Config = load_config(config_path)
 
-    all_wallpapers: list[str] = get_wallpapers(config)
+    all_wallpapers: list[str] = []
+    if img_paths:
+        all_wallpapers = img_paths
+    else:
+        all_wallpapers = get_wallpapers(config)
 
     for command in config.commands:
         wallpaper = rchoice(all_wallpapers)
@@ -240,15 +244,13 @@ def main(arguments: Namespace) -> None:
 
             start_daemon(config_path, arguments.daemon)
         case "next":
-            try:
-                with open("/tmp/rwall/rwall.pid", 'r') as pid_file:
-                    possible_pid: int = int(pid_file.read())
-                kill(possible_pid, 0)
-            except OSError or FileNotFoundError:
-                next_wallpaper(config_path)
+            if check_running():
+                write_pipe("next")
+
+            if not arguments.choices and arguments.stdin:
+                next_wallpaper(config_path, [input()])
             else:
-                with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
-                    named_pipe.write("next")
+                next_wallpaper(config_path, arguments.choices)
         case "kill":
             if check_running():
                 with open("/tmp/rwall/rwall.fifo", 'w') as named_pipe:
@@ -269,6 +271,8 @@ if __name__ == "__main__":
     start_parser.add_argument("-d", "--daemon", action = "store_true", dest = "daemon")
 
     next_parser = subparsers.add_parser("next")
+    next_parser.add_argument("-c", "--choose", dest="choices", nargs="*")
+    next_parser.add_argument("-s", "--stdin", dest="stdin", action="store_true")
 
     kill_parser = subparsers.add_parser("kill")
 
